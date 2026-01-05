@@ -50,6 +50,11 @@
             border-bottom: 2px dashed #FFCF48; /* 망고색 강조 */
             background: rgba(255, 207, 72, 0.1);
         }
+        .sheet-input:disabled {
+            background: #f5f5f5;
+            color: #aaa;
+            cursor: not-allowed;
+        }
         .sheet-row { transition: background 0.2s; }
         .sheet-row:focus-within { background: #fffbe6; }
 
@@ -76,6 +81,14 @@
         @keyframes spin {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+        }
+
+        /* 체크박스 커스텀 */
+        .custom-checkbox {
+            accent-color: #FFCF48;
+            width: 16px;
+            height: 16px;
+            cursor: pointer;
         }
     </style>
 </head>
@@ -294,7 +307,6 @@
                 if(confirm('삭제할까요? 🗑️')) deleteDoc(doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', col, id));
             };
             
-            // Save Exchange Rate
             const saveExchangeRate = async (newRate) => {
                 const rate = parseFloat(newRate);
                 setExchangeRate(rate);
@@ -302,15 +314,13 @@
                 await setDoc(doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'settings', 'global'), { exchangeRate: rate });
             };
 
-            // Fetch Real-time Rate API
             const fetchLiveRate = async () => {
                 setIsLoadingRate(true);
                 try {
-                    // Using free ExchangeRate-API (No API Key required for standard base currency endpoints)
                     const response = await fetch('https://api.exchangerate-api.com/v4/latest/THB');
                     const data = await response.json();
                     if (data && data.rates && data.rates.KRW) {
-                        const liveRate = Math.round(data.rates.KRW * 100) / 100; // Round to 2 decimals
+                        const liveRate = Math.round(data.rates.KRW * 100) / 100;
                         await saveExchangeRate(liveRate);
                         alert(`실시간 환율 적용 완료!\n현재 1 THB = ${liveRate} KRW`);
                     } else {
@@ -318,7 +328,7 @@
                     }
                 } catch (e) {
                     console.error("Exchange rate fetch failed", e);
-                    alert("환율 정보를 가져오는데 실패했습니다.\n잠시 후 다시 시도하거나 수동으로 입력해주세요.");
+                    alert("환율 정보를 가져오는데 실패했습니다.");
                 } finally {
                     setIsLoadingRate(false);
                 }
@@ -333,7 +343,8 @@
             };
 
             const startEditMode = () => {
-                const dayItems = itinerary.filter(i => i.day === dayTab).sort((a,b) => (a.time||"").localeCompare(b.time||""));
+                // 수정 모드 진입 시, 현재 보이는 순서(등록순) 그대로 가져옴
+                const dayItems = currentDayItems;
                 setEditBuffer(JSON.parse(JSON.stringify(dayItems))); 
                 setDeletedIds([]);
                 setIsEditMode(true);
@@ -361,10 +372,11 @@
             const addBufferRow = () => {
                 setEditBuffer([...editBuffer, {
                     id: 'temp_' + Date.now(),
-                    text: '', time: '', cost: 0, memo: '', completed: false, day: dayTab, createdAt: Date.now()
+                    text: '', time: '', cost: 0, memo: '', completed: false, isTimeTBD: false, day: dayTab, createdAt: Date.now()
                 }]);
             };
             const updateBufferItem = (id, field, value) => setEditBuffer(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+            
             const removeBufferItem = (id) => {
                 if (!id.startsWith('temp_')) setDeletedIds(prev => [...prev, id]);
                 setEditBuffer(prev => prev.filter(item => item.id !== id));
@@ -377,7 +389,9 @@
             }, [preExpenses, itinerary, addExpenses, exchangeRate]);
 
             const currentDayItems = React.useMemo(() => {
-                return itinerary.filter(i => i.day === dayTab).sort((a,b) => (a.time||"").localeCompare(b.time||""));
+                // 시간순 자동 정렬 제거 -> 등록순(createdAt) 유지
+                // Firestore 쿼리에서 이미 createdAt 오름차순으로 가져옴
+                return itinerary.filter(i => i.day === dayTab);
             }, [itinerary, dayTab]);
 
             if (!user) return <div className="flex h-screen items-center justify-center text-[#FFCF48] font-bold text-xl">로딩중...🥭</div>;
@@ -491,7 +505,7 @@
                                             {/* Header Row */}
                                             <div className="flex text-xs font-bold text-gray-400 border-b-2 border-dashed border-[#FFCF48] pb-2 mb-2 px-2 select-none">
                                                 <div className="w-8 text-center">{isEditMode ? '삭제' : '✔'}</div>
-                                                <div className="w-14 pl-1 text-center">시간</div>
+                                                <div className="w-16 pl-1 text-center">시간</div>
                                                 <div className="flex-1 pl-2">내용 / 메모</div>
                                                 <div className="w-16 text-right">비용</div>
                                             </div>
@@ -509,11 +523,32 @@
                                                                 </button>
                                                             )}
                                                         </div>
-                                                        <div className="w-14 pt-0.5 text-center">
+                                                        <div className="w-16 pt-0.5 text-center flex flex-col items-center">
                                                             {isEditMode ? (
-                                                                <input type="time" value={item.time} onChange={e => updateBufferItem(item.id, 'time', e.target.value)} className="sheet-input font-mono text-xs bg-[#FFF8E1] rounded text-center" />
+                                                                <>
+                                                                    <input 
+                                                                        type="time" 
+                                                                        value={item.time} 
+                                                                        disabled={item.isTimeTBD}
+                                                                        onChange={e => updateBufferItem(item.id, 'time', e.target.value)} 
+                                                                        className="sheet-input font-mono text-xs bg-[#FFF8E1] rounded text-center" 
+                                                                    />
+                                                                    <div className="flex items-center gap-1 mt-1">
+                                                                        <input 
+                                                                            type="checkbox" 
+                                                                            checked={item.isTimeTBD || false}
+                                                                            onChange={e => updateBufferItem(item.id, 'isTimeTBD', e.target.checked)}
+                                                                            className="custom-checkbox"
+                                                                        />
+                                                                        <span className="text-[10px] text-gray-400">미정</span>
+                                                                    </div>
+                                                                </>
                                                             ) : (
-                                                                <span className="text-sm font-bold text-[#F06292] bg-[#FCE4EC] px-2 py-0.5 rounded-lg">{item.time || '-'}</span>
+                                                                item.isTimeTBD ? (
+                                                                    <span className="text-xs font-bold text-gray-400 bg-gray-100 px-2 py-1 rounded-lg">미정</span>
+                                                                ) : (
+                                                                    <span className="text-sm font-bold text-[#F06292] bg-[#FCE4EC] px-2 py-0.5 rounded-lg">{item.time || '-'}</span>
+                                                                )
                                                             )}
                                                         </div>
                                                         <div className="flex-1 px-3 min-w-0 space-y-1">
