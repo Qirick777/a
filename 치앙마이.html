@@ -1,0 +1,565 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>행복한 치앙마이 여행</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
+    
+    <!-- Babel (for JSX) -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Lucide Icons -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+
+    <!-- Google Fonts (Cute Style) -->
+    <link href="https://fonts.googleapis.com/css2?family=Gaegu:wght@300;400;700&family=Jua&display=swap" rel="stylesheet">
+
+    <style>
+        body { 
+            font-family: 'Jua', 'Gaegu', sans-serif; 
+            background-color: #FFFDF5; /* 따뜻한 크림색 배경 */
+            color: #5D5F61;
+            -webkit-tap-highlight-color: transparent; 
+        }
+        
+        /* 스크롤바 숨김 */
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
+
+        /* 시트 입력창 스타일 */
+        .sheet-input {
+            width: 100%;
+            background: transparent;
+            border: none;
+            outline: none;
+            padding: 4px;
+            font-size: 0.95rem;
+            font-family: 'Jua', sans-serif;
+            color: #555;
+            border-bottom: 2px dashed transparent;
+            transition: all 0.2s;
+        }
+        .sheet-input:focus {
+            border-bottom: 2px dashed #FFCF48; /* 망고색 강조 */
+            background: rgba(255, 207, 72, 0.1);
+        }
+        .sheet-row { transition: background 0.2s; }
+        .sheet-row:focus-within { background: #fffbe6; }
+
+        /* 파스텔 버튼 효과 */
+        .btn-pastel {
+            transition: transform 0.1s, box-shadow 0.1s;
+        }
+        .btn-pastel:active {
+            transform: scale(0.98);
+        }
+
+        /* 폰트 적용 */
+        h1, h2, h3, button, input, .font-cute {
+            font-family: 'Jua', sans-serif;
+        }
+        .handwriting {
+            font-family: 'Gaegu', cursive;
+        }
+    </style>
+</head>
+<body class="bg-[#FFFDF5]">
+
+    <div id="root"></div>
+
+    <!-- Firebase SDKs -->
+    <script type="importmap">
+      {
+        "imports": {
+          "firebase/app": "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js",
+          "firebase/auth": "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js",
+          "firebase/firestore": "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js"
+        }
+      }
+    </script>
+
+    <script type="text/babel" data-type="module">
+        import { initializeApp } from "firebase/app";
+        import { getAuth, signInAnonymously, onAuthStateChanged } from "firebase/auth";
+        import { 
+            getFirestore, collection, addDoc, updateDoc, deleteDoc, doc, onSnapshot, query, orderBy, writeBatch 
+        } from "firebase/firestore";
+
+        // --- Firebase Config ---
+        const firebaseConfig = {
+            apiKey: "AIzaSyBlXRqwRCrUaQcD2nYVKvHlJoUBZwMn2KE",
+            authDomain: "sjty-db.firebaseapp.com",
+            projectId: "sjty-db",
+            storageBucket: "sjty-db.firebasestorage.app",
+            messagingSenderId: "263488452692",
+            appId: "1:263488452692:web:cba3073a2cecdb02bb95c1",
+            measurementId: "G-CLQLZEQKYP"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        // 앱 ID를 유지하여 기존 데이터에 접근
+        const SHARED_APP_ID = "sjty-trip-v1";
+
+        // --- Icons Component Wrapper ---
+        const Icon = ({ name, size = 18, className = "" }) => {
+            React.useEffect(() => {
+                lucide.createIcons();
+            }, [name]);
+            return <i data-lucide={name} width={size} height={size} className={className}></i>;
+        };
+
+        // --- Components ---
+
+        // Error Banner
+        const PermissionErrorBanner = () => (
+            <div className="bg-red-50 border-l-4 border-red-400 p-4 m-4 rounded-r-xl shadow-sm animate-bounce">
+                <div className="flex items-start">
+                    <div className="mr-3 text-red-400"><Icon name="alert-triangle" size={24} /></div>
+                    <div>
+                        <h3 className="text-red-800 font-bold text-sm">DB 연결 권한 필요</h3>
+                        <p className="text-red-600 text-xs mt-1">Firebase Console > Firestore Database > Rules 에 아래 코드를 붙여넣으세요:</p>
+                        <div className="bg-white/50 p-2 mt-2 rounded text-[10px] font-mono text-red-900 overflow-x-auto whitespace-pre select-all">
+{`match /artifacts/${SHARED_APP_ID}/public/data/{collectionName}/{document=**} {
+  allow read, write: if true;
+}`}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
+
+        // Simple Input for Add (Used in Prep tab)
+        const SimpleAddItem = ({ onAdd, placeholder, hasCost }) => {
+            const [text, setText] = React.useState('');
+            const [cost, setCost] = React.useState('');
+
+            const handleSubmit = (e) => {
+                e.preventDefault();
+                if(!text.trim()) return;
+                onAdd({ text, cost: cost ? parseInt(cost) : 0, completed: false, createdAt: Date.now() });
+                setText('');
+                setCost('');
+            };
+
+            return (
+                <form onSubmit={handleSubmit} className="mt-2 flex gap-2">
+                    <input 
+                        type="text" value={text} onChange={e=>setText(e.target.value)} 
+                        placeholder={placeholder} 
+                        className="flex-1 bg-white border-2 border-[#E8F5E9] rounded-xl px-3 py-2 text-sm focus:outline-none focus:border-[#68D391] text-gray-600 placeholder-gray-300"
+                    />
+                    {hasCost && (
+                        <input 
+                            type="number" value={cost} onChange={e=>setCost(e.target.value)} 
+                            placeholder="₩" 
+                            className="w-20 bg-white border-2 border-[#E8F5E9] rounded-xl px-2 py-2 text-sm text-center focus:outline-none focus:border-[#68D391]"
+                        />
+                    )}
+                    <button type="submit" className="bg-[#68D391] text-white rounded-xl px-3 flex items-center justify-center shadow-sm hover:bg-[#5CB87F] btn-pastel">
+                        <Icon name="plus" size={18} />
+                    </button>
+                </form>
+            );
+        };
+
+        // Checklist Item (Prep Tab) - Pastel Style
+        const ChecklistItem = ({ item, onToggle, onDelete, showCost }) => (
+            <div className={`flex items-center gap-3 p-3 bg-white rounded-2xl shadow-sm border-2 transition-all ${item.completed ? 'border-[#E8F5E9] opacity-60 bg-[#F9FFF9]' : 'border-[#E3F2FD]'}`}>
+                <button onClick={() => onToggle(item)} className="text-gray-400 btn-pastel">
+                    <Icon name={item.completed ? "check-circle-2" : "circle"} className={item.completed ? "text-[#68D391]" : "text-[#A3D8F4]"} size={22} />
+                </button>
+                <div className="flex-1 min-w-0">
+                    <div className={`font-medium text-lg truncate ${item.completed ? 'line-through text-gray-300' : 'text-gray-700'}`}>
+                        {item.text}
+                    </div>
+                    {showCost && item.cost > 0 && (
+                        <div className="text-xs text-[#F687B3] font-bold">₩ {item.cost.toLocaleString()}</div>
+                    )}
+                </div>
+                <button onClick={() => onDelete(item.id)} className="text-gray-300 hover:text-[#F687B3] p-1 btn-pastel">
+                    <Icon name="trash-2" size={16} />
+                </button>
+            </div>
+        );
+
+        // Collapsible Section Component
+        const CollapsibleSection = ({ title, iconName, iconColor, children, defaultOpen = false, borderColor = "border-[#E3F2FD]" }) => {
+            const [isOpen, setIsOpen] = React.useState(defaultOpen);
+
+            return (
+                <div className={`bg-white rounded-2xl shadow-sm border-2 ${borderColor} overflow-hidden transition-all mb-4`}>
+                    <button 
+                        onClick={() => setIsOpen(!isOpen)} 
+                        className="w-full flex items-center justify-between p-4 bg-[#FAFAFA] hover:bg-[#F5F5F5] transition-colors"
+                    >
+                        <h2 className={`text-lg font-bold ${iconColor} flex items-center gap-2`}>
+                            <Icon name={iconName} size={20}/> {title}
+                        </h2>
+                        <div className={`text-gray-400 transform transition-transform duration-200 ${isOpen ? 'rotate-180' : ''}`}>
+                            <Icon name="chevron-down" size={20} />
+                        </div>
+                    </button>
+                    {isOpen && (
+                        <div className="p-3 border-t-2 border-[#F0F0F0] bg-white animate-fade-in-down">
+                            {children}
+                        </div>
+                    )}
+                </div>
+            );
+        };
+
+        // --- Main App ---
+        const App = () => {
+            const [user, setUser] = React.useState(null);
+            const [mainTab, setMainTab] = React.useState('plan'); 
+            const [dayTab, setDayTab] = React.useState(1);
+            const [isEditMode, setIsEditMode] = React.useState(false);
+            const [permissionError, setPermissionError] = React.useState(false);
+
+            // Data
+            const [taeyongItems, setTaeyongItems] = React.useState([]);
+            const [seojinItems, setSeojinItems] = React.useState([]);
+            const [preExpenses, setPreExpenses] = React.useState([]);
+            const [itinerary, setItinerary] = React.useState([]);
+            const [addExpenses, setAddExpenses] = React.useState([]);
+
+            // Edit Mode State (Temporary buffer)
+            const [editBuffer, setEditBuffer] = React.useState([]);
+            const [deletedIds, setDeletedIds] = React.useState([]);
+
+            // --- Effects ---
+            React.useEffect(() => {
+                const initAuth = async () => {
+                    try {
+                        await signInAnonymously(auth);
+                    } catch (e) { console.error(e); }
+                };
+                initAuth();
+                return onAuthStateChanged(auth, setUser);
+            }, []);
+
+            React.useEffect(() => {
+                if (!user) return;
+                const sub = (col, set) => {
+                    const q = query(collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', col), orderBy('createdAt', 'asc'));
+                    return onSnapshot(q, s => {
+                        set(s.docs.map(d => ({id: d.id, ...d.data()})));
+                        setPermissionError(false);
+                    }, err => {
+                        if(err.code === 'permission-denied') setPermissionError(true);
+                    });
+                };
+                const u1 = sub('items_taeyong', setTaeyongItems);
+                const u2 = sub('items_seojin', setSeojinItems);
+                const u3 = sub('pre_expenses', setPreExpenses);
+                const u4 = sub('itinerary', setItinerary);
+                const u5 = sub('add_expenses', setAddExpenses);
+                return () => { u1(); u2(); u3(); u4(); u5(); };
+            }, [user]);
+
+            // --- Logic ---
+            const addItem = async (col, data) => addDoc(collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', col), data);
+            const toggleItem = async (col, item) => updateDoc(doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', col, item.id), { completed: !item.completed });
+            const deleteItemReal = async (col, id) => {
+                if(confirm('삭제할까요? 🗑️')) deleteDoc(doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', col, id));
+            };
+
+            // Itinerary Auto Advance
+            const handleItineraryToggle = async (item) => {
+                if(isEditMode) return;
+                await toggleItem('itinerary', item);
+                const dayItems = itinerary.filter(i => i.day === item.day);
+                const allDone = dayItems.every(i => i.id === item.id ? !i.completed : i.completed);
+                if(allDone && item.day < 5 && !item.completed) setTimeout(() => setDayTab(d => Math.min(d+1, 5)), 600);
+            };
+
+            // --- Edit Mode Handlers ---
+            const startEditMode = () => {
+                const dayItems = itinerary.filter(i => i.day === dayTab).sort((a,b) => (a.time||"").localeCompare(b.time||""));
+                setEditBuffer(JSON.parse(JSON.stringify(dayItems))); 
+                setDeletedIds([]);
+                setIsEditMode(true);
+            };
+
+            const saveEditMode = async () => {
+                if(!user) return;
+                const batch = writeBatch(db);
+                
+                // 1. Deletes
+                deletedIds.forEach(id => {
+                    batch.delete(doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'itinerary', id));
+                });
+
+                // 2. Updates & Adds
+                editBuffer.forEach(item => {
+                    if (item.id.startsWith('temp_')) {
+                        const newRef = doc(collection(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'itinerary'));
+                        const { id, ...data } = item;
+                        batch.set(newRef, data);
+                    } else {
+                        const ref = doc(db, 'artifacts', SHARED_APP_ID, 'public', 'data', 'itinerary', item.id);
+                        const { id, ...data } = item;
+                        batch.update(ref, data);
+                    }
+                });
+
+                try {
+                    await batch.commit();
+                    setIsEditMode(false);
+                } catch (e) {
+                    alert("저장 실패: " + e.message);
+                }
+            };
+
+            const addBufferRow = () => {
+                setEditBuffer([...editBuffer, {
+                    id: 'temp_' + Date.now(),
+                    text: '',
+                    time: '',
+                    cost: 0,
+                    memo: '',
+                    completed: false,
+                    day: dayTab,
+                    createdAt: Date.now()
+                }]);
+            };
+
+            const updateBufferItem = (id, field, value) => {
+                setEditBuffer(prev => prev.map(item => item.id === id ? { ...item, [field]: value } : item));
+            };
+
+            const removeBufferItem = (id) => {
+                if (!id.startsWith('temp_')) setDeletedIds(prev => [...prev, id]);
+                setEditBuffer(prev => prev.filter(item => item.id !== id));
+            };
+
+            // Totals
+            const totalCost = React.useMemo(() => {
+                const sum = arr => arr.reduce((acc,cur) => acc + (parseInt(cur.cost)||0), 0);
+                return sum(preExpenses) + sum(itinerary) + sum(addExpenses);
+            }, [preExpenses, itinerary, addExpenses]);
+
+            const currentDayItems = React.useMemo(() => {
+                return itinerary.filter(i => i.day === dayTab).sort((a,b) => (a.time||"").localeCompare(b.time||""));
+            }, [itinerary, dayTab]);
+
+            // --- Rendering ---
+            if (!user) return <div className="flex h-screen items-center justify-center text-[#FFCF48] font-bold text-xl">로딩중...🥭</div>;
+
+            return (
+                <div className="max-w-md mx-auto min-h-screen bg-[#FFFDF5] pb-24 shadow-2xl relative overflow-hidden flex flex-col border-x border-[#f0e6d2]">
+                    
+                    {/* Header - Chiang Mai Pastel Style */}
+                    <div className="bg-[#FFCF48] pt-8 pb-5 px-6 rounded-b-[30px] shadow-sm z-10 relative overflow-hidden">
+                        <div className="absolute top-[-20px] right-[-20px] w-32 h-32 bg-[#FFDE7D] rounded-full opacity-50"></div>
+                        <div className="absolute bottom-[-10px] left-[-10px] w-20 h-20 bg-[#F687B3] rounded-full opacity-30"></div>
+                        
+                        <div className="relative z-10 text-white">
+                            <div className="flex justify-between items-center mb-1">
+                                <h1 className="text-2xl font-bold drop-shadow-sm">🐘 행복한 치앙마이</h1>
+                                <span className="text-xs bg-white/30 px-3 py-1 rounded-full font-bold handwriting">{dayTab}일차 여행</span>
+                            </div>
+                            <div className="flex items-baseline gap-2 mt-2">
+                                <span className="text-sm opacity-90 handwriting text-lg">총 지출</span>
+                                <span className="text-3xl font-bold drop-shadow-sm">₩ {totalCost.toLocaleString()}</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    {permissionError && <PermissionErrorBanner />}
+
+                    {/* Tabs */}
+                    <div className="px-5 mt-5 flex gap-3">
+                        <button onClick={() => setMainTab('prep')} className={`btn-pastel flex-1 py-3 rounded-2xl text-lg font-bold transition-all flex items-center justify-center gap-2 ${mainTab === 'prep' ? 'bg-white text-[#68D391] border-2 border-[#68D391] shadow-sm' : 'bg-[#E8F5E9] text-[#A5D6A7]'}`}>
+                            <Icon name="backpack" size={20}/> 준비물
+                        </button>
+                        <button onClick={() => setMainTab('plan')} className={`btn-pastel flex-1 py-3 rounded-2xl text-lg font-bold transition-all flex items-center justify-center gap-2 ${mainTab === 'plan' ? 'bg-white text-[#F687B3] border-2 border-[#F687B3] shadow-sm' : 'bg-[#FCE4EC] text-[#F8BBD0]'}`}>
+                            <Icon name="map" size={20}/> 일정표
+                        </button>
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 overflow-y-auto p-5 scrollbar-hide">
+                        
+                        {mainTab === 'prep' && (
+                            <div className="space-y-4 animate-pulse-fade">
+                                <CollapsibleSection title="태용 준비물" iconName="smile" iconColor="text-[#68D391]" borderColor="border-[#E8F5E9]">
+                                    <div className="space-y-2">
+                                        {taeyongItems.map(item => <ChecklistItem key={item.id} item={item} onToggle={i=>toggleItem('items_taeyong',i)} onDelete={i=>deleteItemReal('items_taeyong',i)} />)}
+                                        <SimpleAddItem placeholder="항목 추가..." onAdd={d => addItem('items_taeyong', d)} />
+                                    </div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="서진 준비물" iconName="heart" iconColor="text-[#F687B3]" borderColor="border-[#FCE4EC]">
+                                    <div className="space-y-2">
+                                        {seojinItems.map(item => <ChecklistItem key={item.id} item={item} onToggle={i=>toggleItem('items_seojin',i)} onDelete={i=>deleteItemReal('items_seojin',i)} />)}
+                                        <SimpleAddItem placeholder="항목 추가..." onAdd={d => addItem('items_seojin', d)} />
+                                    </div>
+                                </CollapsibleSection>
+
+                                <CollapsibleSection title="사전 지출" iconName="coins" iconColor="text-[#FFCF48]" borderColor="border-[#FFF8E1]">
+                                    <div className="space-y-2">
+                                        {preExpenses.map(item => (
+                                            <div key={item.id} className="flex justify-between items-center p-2 border-b last:border-0 border-gray-100">
+                                                <span className="text-lg">{item.text}</span>
+                                                <div className="flex items-center gap-2">
+                                                    <span className="font-bold text-[#FFB74D]">₩{item.cost.toLocaleString()}</span>
+                                                    <button onClick={()=>deleteItemReal('pre_expenses', item.id)} className="text-gray-300 hover:text-red-400"><Icon name="trash-2" size={16}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <SimpleAddItem placeholder="항공권 등..." hasCost onAdd={d => addItem('pre_expenses', d)} />
+                                    </div>
+                                </CollapsibleSection>
+                            </div>
+                        )}
+
+                        {mainTab === 'plan' && (
+                            <div className="flex flex-col h-full">
+                                {/* Day Tabs - Cute Style */}
+                                <div className="flex overflow-x-auto gap-2 mb-3 pb-1 scrollbar-hide px-1">
+                                    {[1,2,3,4,5].map(d => (
+                                        <button key={d} onClick={() => { if(!isEditMode) setDayTab(d); }} className={`px-4 py-2 rounded-xl text-lg font-bold whitespace-nowrap btn-pastel border-2 ${dayTab === d ? 'bg-white text-[#F687B3] border-[#F687B3] shadow-sm' : 'bg-[#FFF0F5] border-transparent text-[#F48FB1]'} ${isEditMode ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                                            Day {d}
+                                        </button>
+                                    ))}
+                                </div>
+
+                                {/* Itinerary Sheet - Note Style */}
+                                <div className="bg-white rounded-3xl shadow-sm border-2 border-[#FCE4EC] flex-1 flex flex-col min-h-[400px] relative overflow-hidden">
+                                    {/* Toolbar */}
+                                    <div className="flex justify-between items-center p-4 border-b border-[#FCE4EC] bg-[#FFF8E1]/50">
+                                        <div className="flex items-center gap-2 text-lg font-bold text-gray-600">
+                                            <Icon name="sun" size={20} className="text-[#FFCF48]" /> 
+                                            <span className="handwriting text-xl">{isEditMode ? '자유롭게 수정 중 ✏️' : '오늘의 일정표'}</span>
+                                        </div>
+                                        {isEditMode ? (
+                                            <button onClick={saveEditMode} className="bg-[#F687B3] text-white px-4 py-1.5 rounded-full text-sm font-bold shadow-md hover:bg-[#EC407A] transition-all flex items-center gap-1 btn-pastel">
+                                                <Icon name="save" size={16} /> 저장 완료
+                                            </button>
+                                        ) : (
+                                            <button onClick={startEditMode} className="bg-white border-2 border-[#E0E0E0] text-gray-500 px-3 py-1.5 rounded-full text-sm font-bold shadow-sm hover:bg-gray-50 flex items-center gap-1 btn-pastel">
+                                                <Icon name="edit-3" size={16} /> 수정하기
+                                            </button>
+                                        )}
+                                    </div>
+
+                                    {/* The Sheet */}
+                                    <div className="p-2 flex-1 relative bg-[url('https://www.transparenttextures.com/patterns/notebook.png')]">
+                                        {/* Header Row */}
+                                        <div className="flex text-xs font-bold text-gray-400 border-b-2 border-dashed border-[#FFCF48] pb-2 mb-2 px-2 select-none">
+                                            <div className="w-8 text-center">{isEditMode ? '삭제' : '✔'}</div>
+                                            <div className="w-14 pl-1 text-center">시간</div>
+                                            <div className="flex-1 pl-2">내용 / 메모</div>
+                                            <div className="w-16 text-right">비용</div>
+                                        </div>
+
+                                        {/* Rows */}
+                                        <div className="space-y-1 pb-16">
+                                            {(isEditMode ? editBuffer : currentDayItems).map((item, idx) => (
+                                                <div key={item.id} className={`sheet-row flex items-start py-3 border-b border-[#FCE4EC] last:border-0 ${item.completed && !isEditMode ? 'opacity-40' : ''}`}>
+                                                    
+                                                    {/* Col 1: Action */}
+                                                    <div className="w-8 flex justify-center pt-1">
+                                                        {isEditMode ? (
+                                                            <button onClick={() => removeBufferItem(item.id)} className="text-[#FFAB91] hover:text-[#FF7043]"><Icon name="minus-circle" size={20}/></button>
+                                                        ) : (
+                                                            <button onClick={() => handleItineraryToggle(item)} className={item.completed ? "text-[#68D391]" : "text-[#CFD8DC] hover:text-[#68D391]"}>
+                                                                <Icon name={item.completed ? "check-circle-2" : "circle"} size={22} />
+                                                            </button>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Col 2: Time */}
+                                                    <div className="w-14 pt-0.5 text-center">
+                                                        {isEditMode ? (
+                                                            <input type="time" value={item.time} onChange={e => updateBufferItem(item.id, 'time', e.target.value)} className="sheet-input font-mono text-xs bg-[#FFF8E1] rounded text-center" />
+                                                        ) : (
+                                                            <span className="text-sm font-bold text-[#F06292] bg-[#FCE4EC] px-2 py-0.5 rounded-lg">{item.time || '-'}</span>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Col 3: Text & Memo */}
+                                                    <div className="flex-1 px-3 min-w-0 space-y-1">
+                                                        {isEditMode ? (
+                                                            <>
+                                                                <input type="text" value={item.text} onChange={e => updateBufferItem(item.id, 'text', e.target.value)} placeholder="일정 입력" className="sheet-input font-bold text-lg text-gray-700" />
+                                                                <input type="text" value={item.memo} onChange={e => updateBufferItem(item.id, 'memo', e.target.value)} placeholder="메모 (장소, 팁 등)" className="sheet-input text-sm text-gray-500 handwriting" />
+                                                            </>
+                                                        ) : (
+                                                            <>
+                                                                <div className={`text-xl font-bold text-gray-700 break-words handwriting ${item.completed ? 'line-through decoration-[#F06292]' : ''}`}>{item.text}</div>
+                                                                {item.memo && <div className="text-sm text-gray-500 flex items-start gap-1 handwriting"><Icon name="sticky-note" size={14} className="mt-0.5 text-[#FFCF48]"/>{item.memo}</div>}
+                                                            </>
+                                                        )}
+                                                    </div>
+
+                                                    {/* Col 4: Cost */}
+                                                    <div className="w-16 pt-0.5">
+                                                        {isEditMode ? (
+                                                            <input type="number" value={item.cost} onChange={e => updateBufferItem(item.id, 'cost', parseInt(e.target.value))} placeholder="0" className="sheet-input text-right text-xs" />
+                                                        ) : (
+                                                            item.cost > 0 && <div className="text-sm font-bold text-[#F48FB1] text-right">₩{item.cost.toLocaleString()}</div>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            ))}
+
+                                            {/* Empty State */}
+                                            {(!isEditMode && currentDayItems.length === 0) && (
+                                                <div className="text-center py-12 text-[#CFD8DC] handwriting text-lg">
+                                                    아직 일정이 없어요.<br/>
+                                                    '수정하기'를 눌러 계획을 세워보세요! ✏️
+                                                </div>
+                                            )}
+
+                                            {/* Add Row Button (Only in Edit Mode) */}
+                                            {isEditMode && (
+                                                <button onClick={addBufferRow} className="w-full py-3 border-2 border-dashed border-[#B3E5FC] rounded-2xl text-[#81D4FA] text-sm font-bold hover:bg-[#E1F5FE] transition-colors flex items-center justify-center gap-1 mt-4">
+                                                    <Icon name="plus-circle" size={18}/> 일정 추가하기
+                                                </button>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                {/* Extra Expenses */}
+                                <div className="mt-5 bg-[#F3E5F5] rounded-3xl p-4 border border-[#E1BEE7]">
+                                    <h3 className="text-sm font-bold text-[#AB47BC] mb-2 flex items-center gap-1 px-1"><Icon name="shopping-bag" size={16}/> 현지 추가 지출</h3>
+                                    <div className="space-y-2">
+                                        {addExpenses.map(item => (
+                                            <div key={item.id} className="flex justify-between text-base bg-white p-3 rounded-2xl shadow-sm items-center">
+                                                <span className="text-gray-700">{item.text}</span>
+                                                <div className="flex gap-2 items-center">
+                                                    <span className="font-bold text-[#EC407A]">₩{item.cost.toLocaleString()}</span>
+                                                    <button onClick={()=>deleteItemReal('add_expenses', item.id)} className="text-gray-300 hover:text-red-400"><Icon name="x" size={16}/></button>
+                                                </div>
+                                            </div>
+                                        ))}
+                                        <SimpleAddItem placeholder="항목..." hasCost onAdd={d => addItem('add_expenses', d)} />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                    </div>
+                </div>
+            );
+        };
+
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<App />);
+        
+        // Initial Icon render
+        setTimeout(() => lucide.createIcons(), 100);
+    </script>
+</body>
+</html>
