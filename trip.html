@@ -1,0 +1,772 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>파주 여행 작전노트</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Canvas Confetti (폭죽 효과 라이브러리) -->
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.6.0/dist/confetti.browser.min.js"></script>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Black+Han+Sans&family=Do+Hyeon&family=Gaegu:wght@300;400;700&display=swap" rel="stylesheet">
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        army: {
+                            light: '#AABF89', // 더 밝은 파스텔 카키
+                            base: '#6B8E23',  // 올리브 드랩
+                            dark: '#4A5D23',
+                            pastel: '#F7F9F0', // 종이 느낌 배경
+                        },
+                        paper: '#FFFDF5', // 누런 종이 색
+                        tape: {
+                            1: '#E6B8B8', // 핑크 테이프
+                            2: '#B8CCE6', // 블루 테이프
+                            3: '#E6E2B8', // 옐로우 테이프
+                            4: '#B8E6C5', // 그린 테이프
+                        }
+                    },
+                    fontFamily: {
+                        'title': ['Do Hyeon', 'sans-serif'],
+                        'hand': ['Gaegu', 'cursive'],
+                        'impact': ['Black Han Sans', 'sans-serif'],
+                    },
+                    boxShadow: {
+                        'sticker': '2px 3px 0px rgba(0, 0, 0, 0.15)',
+                        'paper': '1px 2px 4px rgba(0, 0, 0, 0.05)',
+                        'floating': '0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05)',
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        body {
+            background-color: #F7F9F0;
+            background-image: 
+                linear-gradient(#E5E7DC 1px, transparent 1px),
+                linear-gradient(90deg, #E5E7DC 1px, transparent 1px);
+            background-size: 20px 20px;
+            font-family: 'Gaegu', cursive;
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        .hide-scrollbar::-webkit-scrollbar { display: none; }
+        .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+        @keyframes popIn {
+            0% { transform: scale(0.8) rotate(-5deg); opacity: 0; }
+            60% { transform: scale(1.05) rotate(2deg); opacity: 1; }
+            100% { transform: scale(1) rotate(0deg); opacity: 1; }
+        }
+        .quest-popup {
+            animation: popIn 0.4s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+        }
+        
+        .day-tab.active {
+            background-color: #6B8E23;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 2px 3px 0px rgba(74, 93, 35, 0.3);
+            border: 2px solid #4A5D23;
+        }
+        .day-tab {
+            background-color: #FFF;
+            color: #6B8E23;
+            border: 2px solid #AABF89;
+            border-bottom: 4px solid #AABF89;
+        }
+
+        /* 체크박스 커스텀 */
+        .custom-checkbox:checked + div {
+            background-color: #6B8E23;
+            border-color: #4A5D23;
+            transform: scale(1.1);
+        }
+        
+        /* 마스킹 테이프 효과 */
+        .masking-tape {
+            position: absolute;
+            top: -12px;
+            left: 50%;
+            transform: translateX(-50%) rotate(-2deg);
+            width: 80px;
+            height: 24px;
+            background-color: rgba(230, 230, 230, 0.8);
+            opacity: 0.8;
+            box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+            z-index: 10;
+        }
+        .masking-tape::before, .masking-tape::after {
+            content: '';
+            position: absolute;
+            width: 4px;
+            height: 100%;
+            background: white;
+            opacity: 0.3;
+        }
+        .masking-tape::before { left: -2px; border-right: 1px dotted gray; }
+        .masking-tape::after { right: -2px; border-left: 1px dotted gray; }
+
+        /* 완료된 항목 스타일 */
+        .item-completed {
+            opacity: 0.7;
+            filter: grayscale(0.5);
+            transform: scale(0.98);
+        }
+        .item-completed::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 5%;
+            width: 90%;
+            height: 2px;
+            background: #FF4444;
+            transform: rotate(-1deg);
+            opacity: 0.6;
+            pointer-events: none;
+        }
+
+        /* 토스트 메시지 애니메이션 */
+        @keyframes slideUpFade {
+            0% { transform: translate(-50%, 20px); opacity: 0; }
+            100% { transform: translate(-50%, 0); opacity: 1; }
+        }
+        .toast-msg {
+            animation: slideUpFade 0.3s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="text-gray-800 h-screen flex flex-col overflow-hidden max-w-md mx-auto shadow-2xl bg-[#F7F9F0] border-x-4 border-army-light/30">
+
+    <!-- Header -->
+    <header class="bg-army-base p-4 pt-6 text-center shadow-md z-20 relative rounded-b-3xl mx-2 mt-[-10px] border-b-4 border-army-dark">
+        <!-- 스프링 구멍 장식 -->
+        <div class="absolute top-2 left-0 w-full flex justify-between px-6">
+            <div class="w-3 h-3 rounded-full bg-gray-800/20"></div>
+            <div class="w-3 h-3 rounded-full bg-gray-800/20"></div>
+            <div class="w-3 h-3 rounded-full bg-gray-800/20"></div>
+            <div class="w-3 h-3 rounded-full bg-gray-800/20"></div>
+            <div class="w-3 h-3 rounded-full bg-gray-800/20"></div>
+            <div class="w-3 h-3 rounded-full bg-gray-800/20"></div>
+        </div>
+
+        <h1 class="text-3xl text-[#FFFDF5] font-title tracking-wider drop-shadow-md flex items-center justify-center gap-2">
+            <i class="fas fa-star text-yellow-300 text-xl animate-pulse"></i>
+            파주 여행 작전노트
+            <i class="fas fa-star text-yellow-300 text-xl animate-pulse"></i>
+        </h1>
+        <div class="inline-block bg-army-dark/30 rounded-full px-4 py-1 mt-2">
+            <p class="text-[#FFFDF5] text-sm font-hand tracking-widest">D-DAY OPERATION</p>
+        </div>
+    </header>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto relative hide-scrollbar p-5 pb-24 flex flex-col z-10">
+        
+        <!-- Day Selector Tabs -->
+        <div class="flex space-x-3 mb-6 sticky top-0 bg-[#F7F9F0]/90 backdrop-blur-sm pt-2 pb-3 z-20 overflow-x-auto shrink-0 px-1">
+            <button onclick="switchDay(1)" id="day-btn-1" class="day-tab flex-1 py-2 px-3 rounded-xl font-title text-lg shadow-sm whitespace-nowrap transition-all duration-200">
+                1일차 🌤️
+            </button>
+            <button onclick="switchDay(2)" id="day-btn-2" class="day-tab flex-1 py-2 px-3 rounded-xl font-title text-lg shadow-sm whitespace-nowrap transition-all duration-200">
+                2일차 🎀
+            </button>
+            <button onclick="switchDay(3)" id="day-btn-3" class="day-tab flex-1 py-2 px-3 rounded-xl font-title text-lg shadow-sm whitespace-nowrap transition-all duration-200">
+                3일차 🏡
+            </button>
+        </div>
+
+        <!-- Day Content Containers -->
+        <div id="day1-list" class="space-y-6"></div>
+        <div id="day2-list" class="hidden space-y-6"></div>
+        <div id="day3-list" class="hidden space-y-6"></div>
+
+        <!-- Reset Button -->
+        <div class="mt-12 text-center">
+            <button onclick="resetTrip()" class="text-gray-400 text-sm underline hover:text-red-400 font-hand">
+                여행 기록 초기화하기 (다시 시작)
+            </button>
+        </div>
+    </main>
+
+    <!-- Quest Complete Overlay -->
+    <div id="quest-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 hidden flex items-center justify-center p-6">
+        <div class="quest-popup bg-paper rounded-sm w-full max-w-sm shadow-2xl relative flex flex-col border-8 border-white transform rotate-1" style="box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.4), 0 10px 10px -5px rgba(0, 0, 0, 0.2);">
+            
+            <!-- Close Button -->
+            <button onclick="closePopup()" class="absolute -top-4 -right-4 z-30 bg-red-400 text-white rounded-full w-10 h-10 flex items-center justify-center shadow-sticker hover:bg-red-500 hover:scale-110 transition-all border-2 border-white">
+                <i class="fas fa-times text-xl"></i>
+            </button>
+
+            <!-- Taped Header -->
+            <div class="absolute -top-3 left-1/2 -translate-x-1/2 bg-yellow-200/90 w-32 h-8 rotate-1 shadow-sm z-20"></div>
+            <div class="text-center pt-8 pb-2 px-4 relative z-10">
+                <h2 id="popup-title" class="text-2xl text-army-dark font-title tracking-wide border-b-2 border-dashed border-army-light/50 pb-2 inline-block">퀘스트 완료!</h2>
+            </div>
+            
+            <!-- Polaroid Image Area -->
+            <div class="px-4 pb-2">
+                <div class="bg-black p-1 shadow-inner rounded-sm">
+                    <div id="popup-image-area" class="relative w-full aspect-square bg-gray-100 group shrink-0 overflow-hidden">
+                        <!-- Media Container -->
+                        <div id="popup-media-container" class="w-full h-full flex items-center justify-center bg-gray-900"></div>
+                        
+                        <!-- Slider Controls -->
+                        <div id="slider-controls" class="hidden">
+                            <button onclick="prevImage()" class="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 w-8 h-8 rounded-full text-army-dark shadow-md z-10 hover:bg-white flex items-center justify-center">
+                                <i class="fas fa-chevron-left"></i>
+                            </button>
+                            <button onclick="nextImage()" class="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 w-8 h-8 rounded-full text-army-dark shadow-md z-10 hover:bg-white flex items-center justify-center">
+                                <i class="fas fa-chevron-right"></i>
+                            </button>
+                            <div class="absolute bottom-2 right-2 bg-black/60 text-white text-xs px-2 py-1 rounded-md font-sans z-10">
+                                <span id="img-idx">1</span> / <span id="img-total">1</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Handwritten Note Area -->
+            <div class="p-5 flex-1 bg-[url('https://www.transparenttextures.com/patterns/lined-paper.png')]">
+                <p id="popup-desc" class="text-gray-700 text-lg font-hand leading-7 break-keep whitespace-pre-wrap" style="line-height: 1.8;"></p>
+                <div class="mt-4 text-right">
+                    <span class="inline-block bg-army-light/30 px-2 py-1 rounded text-army-dark text-sm transform -rotate-2">
+                        <i class="fas fa-heart text-red-400 mr-1"></i> 서진이와 함께
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Data: Itinerary ---
+        const itinerary = {
+            day1: [
+                { 
+                    raw: "12:00 🚗 일산호수공원 주차(3시간 2500원), 웨스턴돔 도착", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/dom.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/maras.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/mara.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/yup.jpg"
+                    ],
+                    popupTitle: "군대에서의 크리스마스",
+                    popupDesc: "12월 16일, 아직 크리스마스는 아니었지만 외박을 나와서 크리스마스 분위기를 낸 날~ 웨스턴 돔에 와서 마라탕도 먹고, 엽기 떡볶이도 먹었었지. 다시 겨울에 이곳에 오다니. 저번달에 크리스마스였으니까, 크리스마스 트리 똑같은게 그대로 있을까?ㅋㅋ",
+                    mapQuery: "일산 웨스턴돔"
+                },
+                { 
+                    raw: "🍜 겐로쿠 우동에서 점심", 
+                    quest: false,
+                    mapQuery: "일산 겐로쿠우동"
+                },
+                { 
+                    raw: "☕ 라테라스드파리", 
+                    quest: false,
+                    mapQuery: "일산 라테라스드파리"
+                },
+                { 
+                    raw: "15:00 🦆 일산호수공원 (수상꽃자전거 2인용 14000원)", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/il0.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/il1.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/il2.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/il3.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/il4.jpg"
+                    ],
+                    popupTitle: "꽃도 보고 물 위도 떠다녔던 그날",
+                    popupDesc: "이 날은 일산호수공원에 꽃이 활짝 피었었던 날이었어. 24년 5월 4일, 거의 전역이 얼마 남지 않았었을 때였지. 같이 물 위에서 수상자전거도 타면서 얘기도 하고 평화로워서 너무 즐거웠었어.",
+                    mapQuery: "일산호수공원"
+                },
+                { 
+                    raw: "16:00 🏨 금촌에 숙소 체크인", 
+                    quest: false,
+                    mapQuery: "파주 금촌역"
+                },
+                { 
+                    raw: "~17:00 🏙️ 금촌역 주변 구경(금촌역 들어가서 나오는 루트, 사진찍기)", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/g1.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/g2.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/g3.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/g4.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/g5.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/g6.jpg"
+                    ],
+                    popupTitle: "어쩌다보니 추억이 깃든 금촌역",
+                    popupDesc: "외출, 외박나오면 나한테 가깝기도 하고, 나름 번화가?여서 자주 왔던 금촌역! 진짜 많이 자주 와서, 금촌역처럼 되어있는 지하철역만 보면 \"어! 여기 금촌역 같다~\"하고 말하곤 하게 되었네. 금촌역에서 에스컬레이터를 타고 내려올 때, 서진이 얼굴이 보면 너무너무 반갑고 기뻤는데~ 이제 마음 편하게 올 수 있어서 기쁘다.",
+                    mapQuery: "금촌역"
+                },
+                { 
+                    raw: "17:00 🍲 언칼국수", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/un0.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/un1.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/un2.mp4"
+                    ],
+                    popupTitle: "자대온지 한달도 안된 짬찌의 외출",
+                    popupDesc: "이 날은 5월 6일! 이제 막 자대에 온 지 한달 된 일병 2호봉의 나였어. 이 날, 당직사관한테 전화가 왔는데 아무것도 모르던 내가 '여보세요?'라고 했다고 또 그렇게 욕을 먹었었는데. ㅋㅋ 아무튼, 언칼국수 맛있었던건 기억 나는데 무슨 맛이었는지는 잘 기억이 안나네. 다시 한번 먹어보면서 추억을 떠올려봐요~",
+                    mapQuery: "파주 언칼국수"
+                },
+                { 
+                    raw: "🌙 밤에 숙소 주변 산책/야식", 
+                    quest: false,
+                    mapQuery: null
+                }
+            ],
+            day2: [
+                { 
+                    raw: "⭐️ 🍰 앨리스케이커리 조각케이크 예약", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/c1.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/c2.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/c3.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/c4.jpg"
+                    ],
+                    popupTitle: "서진이가 좋아하는 케이크 맛집",
+                    popupDesc: "일산 오면 여기서 케이크 먹곤 했지~ 난 그렇게 맛있는지 몰랐는데, 전역하고 나서도 서진이가 기억할 정도면 엄청 맛집이긴 헀나보네. 여기 항상 부대 복귀 하기 직전에 들렸었는데, 이제는 떨어질 일 없이 마음 편히 올 수 있어서 행복하다~",
+                    mapQuery: "앨리스케이커리"
+                },
+                { 
+                    raw: "08:45 📸 문산 인싸포토 도착(길주변에 주차)", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/in1.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/in2.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/in3.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/in4.jpg"
+                    ],
+                    popupTitle: "부대개방 행사 후 인싸포토 찰칵!",
+                    popupDesc: "부모님이 오면 외박이 가능해서~ 엄마아빠 다 데리고 와버려서 서진이랑 같이 외박해버린 날ㅋㅋ 인싸포토에서 사진 찍었는데, 이제 나도 사복 입고 비슷한 구도로 찍으면 재미있을거같아.",
+                    mapQuery: "문산 인싸포토"
+                },
+                { 
+                    raw: "🍙 통큰김밥, 문산역 주변 구경", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/sa1.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/sa2.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/sa3.jpg"
+                    ],
+                    popupTitle: "만나기 위해 항상 거치던 곳",
+                    popupDesc: "어딜 가든 문산을 통해야했었지. 택시를 타면 2만원이나 되던 거리지만 제일 가까운 역이었어서. 항상 서진이를 만나기 위해 여기에 왔고, 서진이랑 만나고 난 뒤 복귀할 때도 다시 여기로 왔었던 곳이었어. 이제는 이곳에서 시작과 끝이 아닌, 여행의 한 가운데라는 것이 엄청 신기하다.",
+                    mapQuery: "문산 통큰김밥"
+                },
+                { 
+                    raw: "9:30 🕊️ DMZ 평화관광 도착 (문산역에서 12분거리)", 
+                    quest: false,
+                    mapQuery: "임진각 평화누리공원"
+                },
+                { 
+                    raw: "🚌 DMZ관광: 10시부터, A코스 약 3시간정도", 
+                    quest: false,
+                    mapQuery: null
+                },
+                { 
+                    raw: "🕐 약 13시경 DMZ관광 종료 예정", 
+                    quest: false,
+                    mapQuery: null
+                },
+                { 
+                    raw: "🥘 관광 종료 후, 탕수육에서 점심 (약 25분거리)", 
+                    quest: true,
+                    images: ["https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/tang.png"],
+                    popupTitle: "최애 짬뽕 맛집!",
+                    popupDesc: "사진이 없는 관계로 로드뷰로 대체... 아무튼, 나한테 최애였는데, 과연 군대에서 못먹었어서 미화된걸까, 아니면 진짜 맛있었던걸까?ㅋㅋ",
+                    mapQuery: "파주 탕수육" // 실제 상호명이 '탕수육'인 곳 가정
+                },
+                { 
+                    raw: "15:00 🔭 상승전망대", 
+                    quest: true,
+                    images: null,
+                    popupTitle: "서진이는 모르는, 나만 드나들던 곳에",
+                    popupDesc: "7호차 운전병을 하면서, 훈련이라던가 출동하게 되면 3대대 밥재소초 쪽으로 해서 이 곳에 자주 오곤 했었지. 난 사실 서진이랑 이곳에 올 수 있다는게 너무 신기하고 설렌다ㅎㅎ. 나만 혼자 오던 곳인데 서진이랑 같이 오다니ㅠㅠ",
+                    mapQuery: "상승전망대"
+                },
+                { 
+                    raw: "15:20 🏘️ 연대앞 경유해서 적성 도착, 적성 주변 구경 (한얼아파트~기타등등)", 
+                    quest: true,
+                    images: [
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/js1.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/js2.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/js3.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/js4.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/js5.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/js6.jpg",
+                        "https://raw.githubusercontent.com/Qirick777/a/refs/heads/main/js7.jpg"
+                    ],
+                    popupTitle: "내 생일을 축하하던 곳에서, 서진이 생일을 축하하는 곳으로",
+                    popupDesc: "내 생일, 평일 외출이라서 얼마 못 보는데도 서진이가 축하해주려고 적성까지 왔었었지ㅠㅠ 너무나도 감동이고 고마웠어. 이제 이곳에서 내가 서진이의 생일을 축하해줄게.",
+                    mapQuery: "파주 적성면"
+                },
+                { 
+                    raw: "16:00 🌉 감악산 출렁다리(야간경관조명행사)", 
+                    quest: false,
+                    mapQuery: "감악산 출렁다리"
+                },
+                { 
+                    raw: "17:40 🥓 싹스리솥뚜껑김치삼겹살", 
+                    quest: false,
+                    mapQuery: "싹쓰리솥뚜껑김치삼겹살"
+                },
+                { 
+                    raw: "🎁 앨리스케이커리 케이크픽업", 
+                    quest: false,
+                    mapQuery: "앨리스케이커리"
+                }
+            ],
+            day3: [
+                { 
+                    raw: "12:00 🍛 효교 점심식사", 
+                    quest: false,
+                    mapQuery: "파주 효교"
+                },
+                { 
+                    raw: "13:00 🍦 픽커스 요거트", 
+                    quest: false,
+                    mapQuery: "파주 픽커스"
+                },
+                { 
+                    raw: "🧸 꼬모다미 소품샵", 
+                    quest: false,
+                    mapQuery: "꼬모다미"
+                },
+                { 
+                    raw: "13:30 🍪 휘낭시에르", 
+                    quest: false,
+                    mapQuery: "휘낭시에르"
+                },
+                { 
+                    raw: "🎁 포코포코 소품샵", 
+                    quest: false,
+                    mapQuery: "포코포코"
+                },
+                { 
+                    raw: "🌿 포레스트아웃팅스 구경", 
+                    quest: false,
+                    mapQuery: "포레스트아웃팅스"
+                },
+                { 
+                    raw: "🦪 굴세상(-18시)", 
+                    quest: false,
+                    mapQuery: "굴세상"
+                },
+                { 
+                    raw: "🏰 행주산성", 
+                    quest: false,
+                    mapQuery: "행주산성"
+                }
+            ]
+        };
+
+        // --- Persistence Logic ---
+        const STORAGE_KEY = 'pajuTripProgress_v2';
+        
+        function getCompletedItems() {
+            const saved = localStorage.getItem(STORAGE_KEY);
+            return saved ? new Set(JSON.parse(saved)) : new Set();
+        }
+
+        function toggleCompletion(uniqueId) {
+            const completed = getCompletedItems();
+            let isAdding = false;
+            
+            if (completed.has(uniqueId)) {
+                completed.delete(uniqueId);
+            } else {
+                completed.add(uniqueId);
+                isAdding = true;
+            }
+            localStorage.setItem(STORAGE_KEY, JSON.stringify([...completed]));
+            
+            updateItemUI(uniqueId, completed.has(uniqueId));
+            
+            if (isAdding) showToast("저장되었습니다! 💾");
+        }
+
+        function markAsCompleted(uniqueId) {
+            const completed = getCompletedItems();
+            if (!completed.has(uniqueId)) {
+                completed.add(uniqueId);
+                localStorage.setItem(STORAGE_KEY, JSON.stringify([...completed]));
+                updateItemUI(uniqueId, true);
+                showToast("저장되었습니다! 💾");
+            }
+        }
+
+        function resetTrip() {
+            if(confirm("모든 여행 기록을 초기화하시겠습니까?")) {
+                localStorage.removeItem(STORAGE_KEY);
+                location.reload();
+            }
+        }
+
+        function updateItemUI(uniqueId, isCompleted) {
+            const el = document.getElementById(`item-${uniqueId}`);
+            if (el) {
+                if (isCompleted) {
+                    el.classList.add('item-completed');
+                    const checkbox = el.querySelector('.custom-checkbox');
+                    if (checkbox) checkbox.checked = true;
+                } else {
+                    el.classList.remove('item-completed');
+                    const checkbox = el.querySelector('.custom-checkbox');
+                    if (checkbox) checkbox.checked = false;
+                }
+            }
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.className = 'fixed bottom-20 left-1/2 transform -translate-x-1/2 bg-gray-800/90 text-white px-4 py-2 rounded-full text-sm font-hand z-50 shadow-lg toast-msg border border-gray-600';
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.add('opacity-0', 'transition-opacity', 'duration-500');
+                setTimeout(() => toast.remove(), 500);
+            }, 1500);
+        }
+
+        // --- Logic: Render Schedule with New Design ---
+        const tapeColors = ['#E6B8B8', '#B8CCE6', '#E6E2B8', '#B8E6C5'];
+
+        function renderSchedule(dayId, data, dayNum) {
+            const container = document.getElementById(dayId);
+            const completedItems = getCompletedItems();
+            let html = '';
+
+            data.forEach((item, index) => {
+                const uniqueId = `d${dayNum}-${index}`;
+                const isCompleted = completedItems.has(uniqueId);
+                
+                // 마스킹 테이프 색상 랜덤 (인덱스 기반)
+                const tapeColor = tapeColors[index % tapeColors.length];
+                // 약간의 회전 (손으로 붙인 느낌)
+                const rotate = (index % 3 - 1) * 1; 
+
+                // 괄호 스타일링
+                let title = item.raw;
+                const parenMatch = item.raw.match(/\(([^)]+)\)/);
+                if (parenMatch) {
+                    title = item.raw.replace(/\(([^)]+)\)/g, '<span class="text-base text-gray-500 font-hand tracking-tight ml-1">($1)</span>');
+                }
+
+                html += `
+                <div id="item-${uniqueId}" 
+                     class="relative bg-white p-5 pt-8 rounded-sm shadow-paper border border-gray-100 transition-all duration-300 ${isCompleted ? 'item-completed' : ''}"
+                     style="transform: rotate(${rotate}deg);">
+                    
+                    <!-- Masking Tape -->
+                    <div class="masking-tape" style="background-color: ${tapeColor}EE;"></div>
+
+                    <!-- Text Content -->
+                    <div class="mb-4 pl-2 border-l-4 border-army-light/30">
+                        <h3 class="title-text font-title text-xl text-gray-800 leading-snug break-keep transition-all duration-300">
+                            ${title}
+                        </h3>
+                    </div>
+
+                    <!-- Action Area -->
+                    <div class="flex items-center justify-between mt-3 pt-3 border-t-2 border-dashed border-gray-100">
+                        <!-- Left: Checkbox or Quest Button -->
+                        ${item.quest 
+                          ? `<button onclick="handleQuestClick('${uniqueId}')" class="group relative bg-army-base text-white font-hand text-lg px-4 py-2 rounded-xl shadow-sticker hover:translate-y-1 hover:shadow-none transition-all border-2 border-white overflow-hidden">
+                               <span class="relative z-10 flex items-center">
+                                 <i class="fas fa-star mr-2 text-yellow-300 animate-spin-slow"></i>추억 보기
+                               </span>
+                               <div class="absolute inset-0 bg-white opacity-0 group-hover:opacity-20 transition-opacity"></div>
+                             </button>`
+                          : `<label class="flex items-center cursor-pointer select-none group">
+                               <input type="checkbox" class="hidden custom-checkbox" 
+                                      onchange="toggleCompletion('${uniqueId}')" ${isCompleted ? 'checked' : ''}>
+                               <div class="w-8 h-8 rounded-full border-2 border-army-light bg-paper flex items-center justify-center transition-all group-hover:bg-army-pastel shadow-sm">
+                                 <i class="fas fa-check text-army-dark hidden text-xl"></i>
+                               </div>
+                               <span class="ml-3 text-lg text-gray-500 font-hand group-hover:text-army-base transition-colors">완료하기</span>
+                             </label>`
+                        }
+
+                        <!-- Right: Map Button (Sticker style) -->
+                        ${item.mapQuery ? `
+                        <a href="https://map.kakao.com/link/search/${item.mapQuery}" target="_blank" 
+                           class="bg-white text-army-base border-2 border-army-light px-3 py-1.5 rounded-full text-base font-bold shadow-sm hover:bg-army-light hover:text-white hover:border-army-light transition-all flex items-center">
+                            <i class="fas fa-map-marked-alt mr-1"></i>지도
+                        </a>
+                        ` : ''}
+                    </div>
+                    
+                    <!-- Decorative element (sticker) for quest items -->
+                    ${item.quest ? `<div class="absolute -bottom-2 -right-2 text-4xl opacity-20 rotate-12">🎁</div>` : ''}
+                </div>
+                `;
+            });
+
+            container.innerHTML = html;
+        }
+
+        function switchDay(dayNum) {
+            document.getElementById('day1-list').classList.add('hidden');
+            document.getElementById('day2-list').classList.add('hidden');
+            document.getElementById('day3-list').classList.add('hidden');
+            
+            document.getElementById('day-btn-1').classList.remove('active');
+            document.getElementById('day-btn-2').classList.remove('active');
+            document.getElementById('day-btn-3').classList.remove('active');
+
+            document.getElementById(`day${dayNum}-list`).classList.remove('hidden');
+            document.getElementById(`day-btn-${dayNum}`).classList.add('active');
+            
+            // 탭 변경 시 스크롤 상단으로
+            document.querySelector('main').scrollTop = 0;
+        }
+
+        let currentImages = [];
+        let currentIdx = 0;
+
+        function handleQuestClick(uniqueId) {
+            markAsCompleted(uniqueId);
+            openQuestPopup(uniqueId);
+            triggerFireworks();
+        }
+
+        function triggerFireworks() {
+            var duration = 2 * 1000;
+            var animationEnd = Date.now() + duration;
+            var defaults = { startVelocity: 30, spread: 360, ticks: 60, zIndex: 100 };
+
+            var randomInRange = (min, max) => Math.random() * (max - min) + min;
+
+            var interval = setInterval(function() {
+                var timeLeft = animationEnd - Date.now();
+
+                if (timeLeft <= 0) {
+                    return clearInterval(interval);
+                }
+
+                var particleCount = 50 * (timeLeft / duration);
+                
+                confetti(Object.assign({}, defaults, { 
+                    particleCount, 
+                    origin: { x: randomInRange(0.1, 0.3), y: Math.random() - 0.2 } 
+                }));
+                confetti(Object.assign({}, defaults, { 
+                    particleCount, 
+                    origin: { x: randomInRange(0.7, 0.9), y: Math.random() - 0.2 } 
+                }));
+            }, 250);
+        }
+
+        function openQuestPopup(uniqueId) {
+            const [d, idx] = uniqueId.replace('d', '').split('-');
+            const dayKey = `day${d}`;
+            const item = itinerary[dayKey][idx];
+
+            if (!item || !item.quest) return;
+
+            document.getElementById('popup-title').textContent = item.popupTitle || "퀘스트 완료!";
+            document.getElementById('popup-desc').textContent = item.popupText || item.popupDesc || "작전 성공!";
+            
+            const imgArea = document.getElementById('popup-image-area');
+
+            if (item.images && item.images.length > 0) {
+                currentImages = item.images;
+                currentIdx = 0;
+                imgArea.classList.remove('hidden');
+                updateSlider();
+            } else {
+                currentImages = [];
+                imgArea.classList.add('hidden');
+            }
+            
+            document.getElementById('quest-overlay').classList.remove('hidden');
+        }
+
+        function updateSlider() {
+            const container = document.getElementById('popup-media-container');
+            const controls = document.getElementById('slider-controls');
+            const idxEl = document.getElementById('img-idx');
+            const totalEl = document.getElementById('img-total');
+
+            const currentSrc = currentImages[currentIdx];
+            const isVideo = currentSrc.endsWith('.mp4');
+
+            container.innerHTML = '';
+
+            if (isVideo) {
+                const video = document.createElement('video');
+                video.src = currentSrc;
+                video.controls = true;
+                video.autoplay = true;
+                video.className = "w-full h-full object-contain bg-black";
+                container.appendChild(video);
+            } else {
+                const img = document.createElement('img');
+                img.src = currentSrc;
+                img.alt = "Memory";
+                img.className = "w-full h-full object-cover border-4 border-white shadow-inner";
+                container.appendChild(img);
+            }
+
+            if (currentImages.length > 1) {
+                controls.classList.remove('hidden');
+                idxEl.textContent = currentIdx + 1;
+                totalEl.textContent = currentImages.length;
+            } else {
+                controls.classList.add('hidden');
+            }
+        }
+
+        function nextImage() {
+            if (currentImages.length <= 1) return;
+            currentIdx = (currentIdx + 1) % currentImages.length;
+            updateSlider();
+        }
+
+        function prevImage() {
+            if (currentImages.length <= 1) return;
+            currentIdx = (currentIdx - 1 + currentImages.length) % currentImages.length;
+            updateSlider();
+        }
+
+        function closePopup() {
+            document.getElementById('popup-media-container').innerHTML = '';
+            document.getElementById('quest-overlay').classList.add('hidden');
+        }
+
+        function initApp() {
+            renderSchedule('day1-list', itinerary.day1, 1);
+            renderSchedule('day2-list', itinerary.day2, 2);
+            renderSchedule('day3-list', itinerary.day3, 3);
+
+            const completed = getCompletedItems();
+            const isDayComplete = (dayKey, dayNum) => {
+                return itinerary[dayKey].every((_, idx) => completed.has(`d${dayNum}-${idx}`));
+            };
+
+            let targetDay = 1;
+            if (isDayComplete('day1', 1)) {
+                targetDay = 2;
+                if (isDayComplete('day2', 2)) {
+                    targetDay = 3;
+                }
+            }
+            switchDay(targetDay);
+        }
+
+        initApp();
+    </script>
+</body>
+</html>
